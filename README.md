@@ -22,6 +22,12 @@ La wiki recuerda la última página y la posición de scroll. Se adapta a cualqu
 
 La configuración se guarda en `config/wikidiosesmonviewer.json`.
 
+## Actualizaciones
+
+Al iniciar el juego, el mod mira si hay una versión nueva en las releases de este repositorio. Si la hay, sale un aviso arriba y un botón **⬆ Actualizar** en la cabecera de la wiki. Al pulsarlo se descarga y se comprueba su huella SHA-256. La versión nueva se instala sola al cerrar el juego.
+
+Para publicar una versión (PowerShell, en esta carpeta): `.\publicar.ps1 1.0.2 "Qué cambió"`.
+
 ## Compilar
 
 Con Java 21: `gradlew build`. El jar queda en `build/libs/WikiDiosesmonViewer.jar`.

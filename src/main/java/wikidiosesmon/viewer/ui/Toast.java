@@ -19,7 +19,11 @@ public final class Toast {
     }
 
     public static void show(String text, Kind kind) {
-        current = new Notice(text, kind, System.currentTimeMillis(), kind == Kind.MOVED ? 6000L : 3000L);
+        show(text, kind, kind == Kind.MOVED ? 6000L : 3000L);
+    }
+
+    public static void show(String text, Kind kind, long lifeMs) {
+        current = new Notice(text, kind, System.currentTimeMillis(), lifeMs);
     }
 
     /** Draws in real GUI coordinates; call last so it stays on top. */

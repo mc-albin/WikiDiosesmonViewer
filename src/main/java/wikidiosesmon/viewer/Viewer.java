@@ -118,6 +118,7 @@ public final class Viewer {
                     Afk.toggle();
                 }
             }
+            case UPDATE -> wikidiosesmon.viewer.update.Updater.downloadAsync();
             case BACK -> WebView.goBack();
             case HOME -> WebView.goHome();
             case RELOAD -> WebView.reload();

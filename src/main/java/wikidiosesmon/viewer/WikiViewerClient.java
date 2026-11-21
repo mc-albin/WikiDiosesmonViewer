@@ -19,11 +19,13 @@ import wikidiosesmon.viewer.ui.MiniHud;
 import wikidiosesmon.viewer.ui.MiniScreen;
 import wikidiosesmon.viewer.ui.Toast;
 import wikidiosesmon.viewer.ui.ViewerScreen;
+import wikidiosesmon.viewer.update.Updater;
 
 /** Fabric entry point: keys, events and HUD. */
 public class WikiViewerClient implements ClientModInitializer {
     private static final Logger LOG = LoggerFactory.getLogger("WikiDiosesmonViewer");
     private static final String CATEGORY = "category.wikidiosesmonviewer";
+    private static Updater.State notifiedUpdate = Updater.State.DISABLED;
 
     @Override
     public void onInitializeClient() {
@@ -46,6 +48,7 @@ public class WikiViewerClient implements ClientModInitializer {
             WebView.tick();
             Afk.tick(client);
             ViewerConfig.tick();
+            updateNotice(client);
         }));
 
         ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
@@ -66,7 +69,9 @@ public class WikiViewerClient implements ClientModInitializer {
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
             safe(ViewerConfig::save);
             safe(WebView::destroy);
+            safe(Updater::applyOnExit);
         });
+        Updater.checkAsync();
 
         HudRenderCallback.EVENT.register((context, tickCounter) -> safe(() -> {
             var screen = MinecraftClient.getInstance().currentScreen;
@@ -80,6 +85,23 @@ public class WikiViewerClient implements ClientModInitializer {
         }));
         AutoTest.registerIfEnabled();
         LOG.info("WikiDiosesmon Viewer cargado (Inicio: abrir, Fin: achicar, Esc: cerrar).");
+    }
+
+    /** One notice in the world when an update is found, and one when it is ready to install. */
+    private static void updateNotice(MinecraftClient client) {
+        Updater.State st = Updater.state();
+        if (client.player == null || st == notifiedUpdate) {
+            return;
+        }
+        if (st == Updater.State.AVAILABLE) {
+            String key = Viewer.openKey == null ? "Inicio" : Viewer.openKey.getBoundKeyLocalizedText().getString();
+            Toast.show("WikiDiosesmonViewer " + Updater.latestVersion() + " disponible · Pulsa " + key + " y luego \"Actualizar\"",
+                    Toast.Kind.INFO, 10_000L);
+            notifiedUpdate = st;
+        } else if (st == Updater.State.READY) {
+            Toast.show("Actualización descargada · Se instala al cerrar el juego", Toast.Kind.INFO, 6_000L);
+            notifiedUpdate = st;
+        }
     }
 
     private static void safe(Runnable r) {

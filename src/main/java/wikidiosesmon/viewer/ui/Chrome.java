@@ -9,13 +9,14 @@ import net.minecraft.text.Text;
 import wikidiosesmon.viewer.ViewerConfig;
 import wikidiosesmon.viewer.WebView;
 import wikidiosesmon.viewer.afk.Afk;
+import wikidiosesmon.viewer.update.Updater;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /** Window frame shared by the full screen and the small window: header, buttons and status overlay. */
 public final class Chrome {
-    public enum Btn { AFK, BACK, HOME, RELOAD, ZOOM_OUT, ZOOM_IN, MINI, FULL, CLOSE }
+    public enum Btn { AFK, UPDATE, BACK, HOME, RELOAD, ZOOM_OUT, ZOOM_IN, MINI, FULL, CLOSE }
 
     public record Hit(Btn btn, int x, int y, int w, int h) {
         public boolean has(double mx, double my) {
@@ -68,6 +69,16 @@ public final class Chrome {
         c.drawText(tr, pct, bx + (pw - tr.getWidth(pct)) / 2, by + 4, Theme.MUTED, false);
         bx = button(c, Btn.ZOOM_OUT, bx, by, s, s, mx, my) - 10;
 
+        // Update pill, only while there is something to say about an update.
+        String up = updateLabel();
+        if (up != null) {
+            int uw = tr.getWidth(up) + 10;
+            if (bx - uw > x + 25 + tr.getWidth(TITLE) + 8) {
+                updateButton(c, bx - uw, by, uw, s, up, mx, my);
+                bx -= uw + 6;
+            }
+        }
+
         // AFK pill: bed + state + counter, green when active, red while AFK.
         String label = Afk.isAfk() ? "AFK " + Afk.elapsed() : "AFK";
         int aw = 22 + tr.getWidth(label) + 6;
@@ -117,6 +128,29 @@ public final class Chrome {
             Theme.round(c, x + 3, y + h / 2 - 2, 4, 4, 2, tint | 0xFF000000);
             c.drawText(tr, label, x + 9, y + (h - 8) / 2 + 1, available ? Theme.TEXT : Theme.FAINT, false);
         }
+    }
+
+    /** Text of the update pill, or null when there is no update to show. */
+    private static String updateLabel() {
+        return switch (Updater.state()) {
+            case AVAILABLE -> "⬆ Actualizar " + Updater.latestVersion();
+            case DOWNLOADING -> "Descargando…";
+            case READY -> "✔ Se instala al cerrar";
+            case ERROR -> "⚠ Reintentar";
+            default -> null;
+        };
+    }
+
+    private void updateButton(DrawContext c, int x, int y, int w, int h, String label, int mx, int my) {
+        hits.add(new Hit(Btn.UPDATE, x, y, w, h));
+        boolean hover = mx >= x && my >= y && mx < x + w && my < y + h;
+        int tint = switch (Updater.state()) {
+            case READY -> Theme.SUCCESS;
+            case ERROR -> Theme.DANGER;
+            default -> Theme.INFO;
+        };
+        Theme.box(c, x, y, w, h, Math.min(Theme.R_CARD, h / 3), Theme.withAlpha(tint, hover ? 0x70 : 0x40), Theme.withAlpha(tint, hover ? 0xFF : 0xCC));
+        c.drawText(tr(), label, x + 5, y + 4, Theme.TEXT, false);
     }
 
     /** Draws a button whose right edge is {@code right}; returns its left edge. */
@@ -180,6 +214,14 @@ public final class Chrome {
             case AFK -> !Afk.available() ? "Este servidor no tiene /afk"
                     : Afk.recentlyMoved() ? "¡Te movieron mientras estabas AFK!"
                     : Afk.isAfk() ? "Estás AFK · " + Afk.elapsed() + " (clic para volver)" : "Ponerte AFK";
+            case UPDATE -> switch (Updater.state()) {
+                case AVAILABLE -> "Versión " + Updater.latestVersion() + " disponible (tienes " + Updater.currentVersion() + ")"
+                        + (Updater.notes().isBlank() ? "" : ": " + Updater.notes()) + ". Clic para descargarla.";
+                case DOWNLOADING -> "Descargando la versión " + Updater.latestVersion() + "…";
+                case READY -> "Versión " + Updater.latestVersion() + " descargada. Se instala al cerrar el juego.";
+                case ERROR -> Updater.error() + " Clic para reintentar.";
+                default -> "";
+            };
             case BACK -> "Atrás";
             case HOME -> "Inicio de la Wiki";
             case RELOAD -> "Recargar (F5)";
