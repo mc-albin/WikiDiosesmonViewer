@@ -1,0 +1,72 @@
+plugins {
+    id 'fabric-loom' version '1.7.4'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+repositories {
+    // MCEF (Chromium for Minecraft, LGPL 2.1) is not on a public Maven repository, so the
+    // unmodified jar is kept in a local repository inside the project.
+    maven { name = 'local-mcef'; url = uri("${rootDir}/libs/repo") }
+}
+
+loom {
+    mixin {
+        // Fixed name, also written in wikidiosesmonviewer.mixins.json. Without the "refmap" entry
+        // the mixins cannot find Minecraft's methods outside the dev environment and the game crashes.
+        defaultRefmapName = "wikidiosesmonviewer-refmap.json"
+        add(sourceSets.main, "wikidiosesmonviewer-refmap.json")
+    }
+    runs {
+        client {
+            // ./gradlew runClient -Pautotest : the dev client opens the viewer and takes screenshots.
+            if (project.hasProperty('autotest')) {
+                vmArg "-Dwdv.autotest=true"
+                if (project.hasProperty("wdvflags")) {
+                    vmArg "-Dwdv.flags=${project.property("wdvflags")}"
+                }
+            }
+        }
+    }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+    // Bundled inside our jar (jar-in-jar) so players install a single file.
+    modImplementation "com.cinemamod:mcef-fabric:${project.mcef_version}"
+    include "com.cinemamod:mcef-fabric:${project.mcef_version}"
+}
+
+processResources {
+    inputs.property "version", project.version
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 21
+    it.options.encoding = 'UTF-8'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+jar {
+    archiveFileName = "WikiDiosesmonViewer-dev.jar"
+}
+
+remapJar {
+    archiveFileName = "WikiDiosesmonViewer.jar"
+}

@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "wikidiosesmonviewer",
+  "version": "${version}",
+  "name": "WikiDiosesmon Viewer",
+  "description": "Abre la WikiDiosesmon (ialbin73.com/wikidiosesmon) dentro del juego: pantalla completa con Inicio, ventana pequeña con Fin, Esc para cerrar. Recuerda tu última página y posición. Incluye botón AFK con contador.",
+  "authors": [
+    "iAlbin73"
+  ],
+  "contact": {
+    "homepage": "https://ialbin73.com/wikidiosesmon"
+  },
+  "license": "All-Rights-Reserved",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "wikidiosesmon.viewer.WikiViewerClient"
+    ]
+  },
+  "mixins": [
+    "wikidiosesmonviewer.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "~1.21.1",
+    "java": ">=21",
+    "fabric-api": ">=0.102.0",
+    "mcef": "*"
+  }
+}
