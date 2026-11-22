@@ -22,6 +22,10 @@ La wiki recuerda la última página y la posición de scroll. Se adapta a cualqu
 
 La configuración se guarda en `config/wikidiosesmonviewer.json`.
 
+Para no quitarle FPS al juego, los procesos de Chromium usan prioridad de CPU baja: el juego va primero y la página usa lo que sobra. Con el juego minimizado, la página se pausa.
+
+La sesión de la web (tu cuenta) se guarda al cerrar la wiki y al cerrar el juego, así que sigue abierta después de reiniciar o actualizar.
+
 ## Actualizaciones
 
 Al iniciar el juego, el mod mira si hay una versión nueva en las releases de este repositorio. Si la hay, sale un aviso arriba y un botón **⬆ Actualizar** en la cabecera de la wiki. Al pulsarlo se descarga y se comprueba su huella SHA-256. La versión nueva se instala sola al cerrar el juego.

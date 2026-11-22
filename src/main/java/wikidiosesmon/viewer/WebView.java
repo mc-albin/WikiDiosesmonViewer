@@ -19,6 +19,7 @@ import org.cef.handler.CefLifeSpanHandlerAdapter;
 import org.cef.handler.CefLoadHandler;
 import org.cef.handler.CefLoadHandlerAdapter;
 import org.cef.handler.CefRequestHandlerAdapter;
+import org.cef.network.CefCookieManager;
 import org.cef.network.CefRequest;
 import org.joml.Matrix4f;
 import org.lwjgl.glfw.GLFW;
@@ -28,6 +29,8 @@ import wikidiosesmon.viewer.ui.Toast;
 
 import java.net.URI;
 import java.util.Locale;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * The one Chromium page of the mod. Light by design:
@@ -54,6 +57,8 @@ public final class WebView {
     private static String error;
     /** When the page was hidden (ms), -1 while visible or not created. */
     private static long hiddenSince = -1;
+    /** Hidden only because the game window is minimized. */
+    private static boolean pausedMinimized;
     /** Scroll to restore after the first load of a remembered page, -1 = none. */
     private static int restoreScroll = -1;
 
@@ -79,6 +84,13 @@ public final class WebView {
         return MCEF.isInitialized();
     }
 
+    /** Stock de la PC para la crianza: lo vuelve a pasar si OrganizerPC reescribió el archivo. */
+    public static void tickBreeders() {
+        if (browser != null && !loading) {
+            PcBreeders.tick(browser);
+        }
+    }
+
     public static boolean exists() {
         return browser != null;
     }
@@ -98,6 +110,25 @@ public final class WebView {
 
     public static boolean canGoBack() {
         return browser != null && canGoBack;
+    }
+
+    /**
+     * Size the page will be drawn at, set before the browser is created. Without it the browser
+     * started at 1280x720 and was resized a moment later, so opening laid out and drew the whole
+     * page twice.
+     */
+    public static void expectSize(boolean mini) {
+        if (browser != null) {
+            return;
+        }
+        MinecraftClient mc = MinecraftClient.getInstance();
+        float ui = wikidiosesmon.viewer.ui.VScreen.uiScale();
+        int vw = Math.round(mc.getWindow().getScaledWidth() / ui);
+        int vh = Math.round(mc.getWindow().getScaledHeight() / ui);
+        int[] size = mini ? wikidiosesmon.viewer.ui.MiniHud.pageSize(vw, vh) : wikidiosesmon.viewer.ui.ViewerScreen.pageSize(vw, vh);
+        double k = wikidiosesmon.viewer.ui.VScreen.unitPx();
+        pendingW = (int) Math.max(64, Math.min(MAX_PX, Math.round(size[0] * k)));
+        pendingH = (int) Math.max(64, Math.min(MAX_PX, Math.round(size[1] * k)));
     }
 
     /** Creates the browser if needed. Returns false while Chromium is not ready yet. */
@@ -139,6 +170,7 @@ public final class WebView {
 
     public static void show() {
         hiddenSince = -1;
+        pausedMinimized = false;
         if (browser != null) {
             browser.setHidden(false);
             browser.setWindowVisibility(true);
@@ -153,11 +185,55 @@ public final class WebView {
         if (hiddenSince < 0) {
             hiddenSince = System.currentTimeMillis();
         }
+        pausedMinimized = false;
         browser.setHidden(true);
         browser.setFocus(false);
         browser.setWindowVisibility(false);
         resetCursor();
         ViewerConfig.markDirty();
+        flushCookies();
+    }
+
+    /**
+     * Writes the cookies (the wiki login) to disk now. Chromium on its own saves them only every
+     * ~30 seconds, and MCEF kills it when the game closes, so a recent login could be lost.
+     */
+    public static void flushCookies() {
+        if (!runtimeReady()) {
+            return;
+        }
+        try {
+            CefCookieManager m = CefCookieManager.getGlobalManager();
+            if (m != null) {
+                m.flushStore(null);
+            }
+        } catch (RuntimeException | LinkageError e) {
+            LOG.warn("No se pudieron guardar las cookies: {}", e.toString());
+        }
+    }
+
+    /** Game closing: flushes the cookies and waits (pumping Chromium) until they are on disk. */
+    public static void flushCookiesAndWait(long maxMs) {
+        if (!runtimeReady()) {
+            return;
+        }
+        try {
+            CefCookieManager m = CefCookieManager.getGlobalManager();
+            CountDownLatch done = new CountDownLatch(1);
+            if (m == null || !m.flushStore(done::countDown)) {
+                return;
+            }
+            long end = System.currentTimeMillis() + maxMs;
+            while (done.getCount() > 0 && System.currentTimeMillis() < end) {
+                MCEF.getApp().getHandle().N_DoMessageLoopWork();
+                done.await(10, TimeUnit.MILLISECONDS);
+            }
+            LOG.info(done.getCount() == 0 ? "Cookies guardadas" : "Las cookies tardaron demasiado en guardarse");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (RuntimeException | LinkageError e) {
+            LOG.warn("No se pudieron guardar las cookies: {}", e.toString());
+        }
     }
 
     public static void focus(boolean focused) {
@@ -173,6 +249,7 @@ public final class WebView {
         loading = false;
         canGoBack = false;
         hiddenSince = -1;
+        pausedMinimized = false;
         appliedW = appliedH = 0;
         appliedZoom = Double.NaN;
         if (b != null) {
@@ -188,11 +265,33 @@ public final class WebView {
     }
 
     public static void tick() {
+        pauseWhileMinimized();
         if (browser != null && hiddenSince > 0) {
             long keep = ViewerConfig.get().freeAfterSeconds * 1000L;
             if (System.currentTimeMillis() - hiddenSince > keep) {
                 destroy();
             }
+        }
+    }
+
+    /**
+     * Game minimized (or alt-tabbed out of full screen): nobody can see the page, so Chromium
+     * stops drawing it and nothing is uploaded. It continues where it was when the game comes back.
+     */
+    private static void pauseWhileMinimized() {
+        if (browser == null || hiddenSince > 0) {
+            return;
+        }
+        long handle = MinecraftClient.getInstance().getWindow().getHandle();
+        boolean minimized = GLFW.glfwGetWindowAttrib(handle, GLFW.GLFW_ICONIFIED) == GLFW.GLFW_TRUE;
+        if (minimized && !pausedMinimized) {
+            pausedMinimized = true;
+            browser.setHidden(true);
+            browser.setWindowVisibility(false);
+        } else if (!minimized && pausedMinimized) {
+            pausedMinimized = false;
+            browser.setHidden(false);
+            browser.setWindowVisibility(true);
         }
     }
 
@@ -332,8 +431,47 @@ public final class WebView {
         }
     }
 
+    /** Scancodes of the top-row keys 0..9 (physical position, same on every layout). */
+    private static final int[] DIGIT_SCANCODES = {0x0B, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A};
+
+    private interface User32Keys extends com.sun.jna.Library {
+        short GetKeyState(int virtKey);
+    }
+
+    private static User32Keys user32;
+    private static boolean user32Failed;
+
+    /** NumLock state. Assumed on when it cannot be read (not Windows, or JNA missing). */
+    private static boolean numLockOn() {
+        if (Util.getOperatingSystem() != Util.OperatingSystem.WINDOWS || user32Failed) {
+            return true;
+        }
+        try {
+            if (user32 == null) {
+                user32 = com.sun.jna.Native.load("user32", User32Keys.class);
+            }
+            return (user32.GetKeyState(0x90 /* VK_NUMLOCK */) & 1) != 0;
+        } catch (Throwable t) {
+            user32Failed = true;
+            LOG.warn("Could not read the NumLock state", t);
+            return true;
+        }
+    }
+
     public static void key(int keyCode, int scanCode, int modifiers, boolean press) {
         if (browser == null) {
+            return;
+        }
+        // MCEF's native side builds the Windows key from the scancode and ignores NumLock, so the
+        // numpad digits arrive as End, Down, PgDn, Left, Right, Home, Up, PgUp and Insert. Chromium
+        // runs that navigation command and drops the digit typed after it. Only 5 ("Clear") got
+        // through. With NumLock on, send them as the top-row digits instead.
+        if (keyCode >= GLFW.GLFW_KEY_KP_0 && keyCode <= GLFW.GLFW_KEY_KP_9 && numLockOn()) {
+            int digit = keyCode - GLFW.GLFW_KEY_KP_0;
+            keyCode = GLFW.GLFW_KEY_0 + digit;
+            scanCode = DIGIT_SCANCODES[digit];
+        } else if (keyCode == GLFW.GLFW_KEY_KP_DECIMAL && numLockOn()) {
+            // Its scancode becomes Delete. The '.' or ',' still arrives through typed().
             return;
         }
         if (press) {
@@ -453,6 +591,10 @@ public final class WebView {
                             + "setTimeout(s,150);setTimeout(s,700);setTimeout(s,1600);})();", "", 0);
                 }
                 appliedZoom = Double.NaN;
+                // A login or logout ends with a page load: keep its cookies even if the game crashes.
+                flushCookies();
+                // Crianza: el stock de la PC (solo con OrganizerPC).
+                PcBreeders.onLoad(b);
             }
 
             @Override
@@ -480,6 +622,9 @@ public final class WebView {
 
             @Override
             public boolean onConsoleMessage(CefBrowser b, CefSettings.LogSeverity level, String message, String source, int line) {
+                if (b == browser && PcBreeders.onConsole(b, message)) {
+                    return true;
+                }
                 if (b == browser && message != null && message.startsWith(SCROLL_TAG)) {
                     try {
                         int y = Integer.parseInt(message.substring(SCROLL_TAG.length()).strip());

@@ -139,19 +139,49 @@ public final class MiniScreen extends VScreen {
             default -> {
             }
         }
+        boolean leftEdge = drag == Drag.RESIZE_L || drag == Drag.RESIZE_LB;
         int minW = Math.min(MiniHud.MIN_W, width);
         int minH = Math.min(MiniHud.MIN_H, height);
+        if (leftEdge && x < 0) {
+            // Left edge past the screen: stop it there instead of pushing the right edge out.
+            w += x;
+            x = 0;
+        }
         if (w < minW) {
-            if (drag == Drag.RESIZE_L || drag == Drag.RESIZE_LB) {
+            if (leftEdge) {
                 x -= minW - w;
             }
             w = minW;
         }
         h = Math.max(minH, h);
-        w = Math.min(w, width);
-        h = Math.min(h, height);
+        // Right or bottom edge past the screen: stop it there instead of pushing the window back.
+        boolean rightEdge = drag == Drag.RESIZE_R || drag == Drag.RESIZE_RB;
+        boolean bottomEdge = drag == Drag.RESIZE_B || drag == Drag.RESIZE_RB || drag == Drag.RESIZE_LB;
+        w = Math.min(w, rightEdge ? width - x : width);
+        h = Math.min(h, bottomEdge ? height - y : height);
         x = Math.max(0, Math.min(width - w, x));
         y = Math.max(0, Math.min(height - h, y));
+
+        // When the window stops at a screen edge or at its minimum size, move the grab point with
+        // the cursor. Otherwise the cursor drifts past the edge, and on the way back that axis stays
+        // frozen until the cursor returns to where it was grabbed (it felt like only vertical
+        // worked, then only horizontal, then both).
+        int usedDx = switch (drag) {
+            case MOVE, RESIZE_L, RESIZE_LB -> x - start[0];
+            case RESIZE_R, RESIZE_RB -> w - start[2];
+            default -> dx;
+        };
+        int usedDy = switch (drag) {
+            case MOVE -> y - start[1];
+            case RESIZE_B, RESIZE_RB, RESIZE_LB -> h - start[3];
+            default -> dy;
+        };
+        if (usedDx != dx) {
+            grabX = mx - usedDx;
+        }
+        if (usedDy != dy) {
+            grabY = my - usedDy;
+        }
         ViewerConfig cfg = ViewerConfig.get();
         cfg.miniX = (double) x / width;
         cfg.miniY = (double) y / height;

@@ -52,6 +52,7 @@ public final class Viewer {
 
     public static void openFull() {
         mode = Mode.FULL;
+        WebView.expectSize(false);
         WebView.ensure();
         WebView.show();
         WebView.focus(true);
@@ -61,6 +62,7 @@ public final class Viewer {
     /** Small window while playing. */
     public static void minimize() {
         mode = Mode.MINI;
+        WebView.expectSize(true);
         WebView.ensure();
         WebView.show();
         WebView.focus(false);
@@ -73,6 +75,7 @@ public final class Viewer {
     /** Frees the cursor over the small window (move, resize, click). */
     public static void interactMini() {
         mode = Mode.MINI;
+        WebView.expectSize(true);
         WebView.ensure();
         WebView.show();
         setScreen(new MiniScreen());
@@ -145,6 +148,7 @@ public final class Viewer {
                 }
             }
         }
+        WebView.tickBreeders();
         // Chromium may finish starting after the viewer was opened.
         if (mode != Mode.CLOSED && !WebView.exists() && WebView.runtimeReady() && WebView.error() == null) {
             WebView.ensure();

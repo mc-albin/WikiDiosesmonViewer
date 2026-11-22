@@ -55,6 +55,12 @@ public final class ViewerConfig {
      */
     public boolean chromiumLigero = true;
 
+    /**
+     * Chromium's processes run at "below normal" CPU priority (Windows), so the game always gets
+     * the CPU first and the page uses only what is left. The page looks the same.
+     */
+    public boolean chromiumPrioridadBaja = true;
+
     /** Extra Chromium switches for testing, applied at game start. */
     public List<String> chromiumFlags = new ArrayList<>();
 

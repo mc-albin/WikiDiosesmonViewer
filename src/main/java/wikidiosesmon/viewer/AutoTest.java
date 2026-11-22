@@ -59,9 +59,9 @@ final class AutoTest {
             fpsN++;
         }
         if (fpsTicks >= 20 * (seconds + 1)) {
-            LOG.info("FPS {}: media {} | Chromium subió {} frames/s, {} ms/s en el hilo del juego", label,
+            LOG.info("FPS {}: media {} | Chromium subió {} frames/s, {} ms/s en el hilo del juego | procesos Chromium con prioridad baja: {}", label,
                     fpsN == 0 ? 0 : fpsSum / fpsN, WikiBrowser.paintCount / Math.max(1, seconds),
-                    String.format("%.1f", WikiBrowser.paintNanos / 1e6 / Math.max(1, seconds)));
+                    String.format("%.1f", WikiBrowser.paintNanos / 1e6 / Math.max(1, seconds)), ChromiumPriority.count());
             fpsSum = 0;
             fpsN = 0;
             fpsTicks = 0;
@@ -70,7 +70,63 @@ final class AutoTest {
         return false;
     }
 
+    private static int dragTicks;
+    private static double dragStartX;
+    private static double dragStartY;
+
+    /**
+     * -Dwdv.dragtest=true: opens the small window at its default place (against the right edge)
+     * and drags its bar with the same calls Minecraft's Mouse makes: right and down past the edge,
+     * then back left. The window must stop at the edge and follow the cursor again as soon as it
+     * turns back. Logs the window rectangle meanwhile.
+     */
+    private static boolean dragTest(MinecraftClient mc) {
+        if (!Boolean.getBoolean("wdv.dragtest")) {
+            return false;
+        }
+        if (dragTicks == 0) {
+            if (!(WebView.runtimeReady() && mc.currentScreen instanceof TitleScreen)) {
+                return true;
+            }
+            mc.getWindow().setWindowedSize(1600, 900);
+            scale(mc, 2);
+            ViewerConfig.get().miniX = -1;
+            ViewerConfig.get().miniY = 0.2;
+            Viewer.interactMini();
+        }
+        dragTicks++;
+        var s = mc.currentScreen;
+        if (dragTicks >= 40 && dragTicks <= 100 && s != null) {
+            int[] r0 = wikidiosesmon.viewer.ui.MiniHud.rect(s.width, s.height);
+            float ui = wikidiosesmon.viewer.ui.VScreen.uiScale();
+            if (dragTicks == 40) {
+                LOG.info("dragtest inicio rect={}", java.util.Arrays.toString(r0));
+                dragStartX = (r0[0] + 60) * ui;
+                dragStartY = (r0[1] + 6) * ui;
+                s.mouseClicked(dragStartX, dragStartY, 0);
+            } else if (dragTicks < 100) {
+                int i = dragTicks - 40;
+                double x = dragStartX + (i <= 30 ? i * 4 : 240 - i * 4);
+                double y = dragStartY + i * 2;
+                s.mouseMoved(x, y);
+                s.mouseDragged(x, y, 0, 4, 2);
+            } else {
+                s.mouseReleased(dragStartX, dragStartY + 120, 0);
+            }
+        }
+        if (dragTicks > 40 && dragTicks <= 104 && dragTicks % 2 == 0 && s != null) {
+            LOG.info("dragtest t={} rect={}", dragTicks, java.util.Arrays.toString(wikidiosesmon.viewer.ui.MiniHud.rect(s.width, s.height)));
+        }
+        if (dragTicks == 120) {
+            mc.scheduleStop();
+        }
+        return true;
+    }
+
     private static void tick(MinecraftClient mc) {
+        if (dragTest(mc)) {
+            return;
+        }
         total++;
         if (total > 20 * 240 && step < 99) {
             LOG.warn("Autotest: tiempo agotado en el paso {}", step);

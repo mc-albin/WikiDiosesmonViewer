@@ -27,6 +27,10 @@ loom {
             // ./gradlew runClient -Pautotest : the dev client opens the viewer and takes screenshots.
             if (project.hasProperty('autotest')) {
                 vmArg "-Dwdv.autotest=true"
+                // -Pdragtest : drag the small window with the real mouse (see AutoTest.dragTest).
+                if (project.hasProperty('dragtest')) {
+                    vmArg "-Dwdv.dragtest=true"
+                }
                 if (project.hasProperty("wdvflags")) {
                     vmArg "-Dwdv.flags=${project.property("wdvflags")}"
                 }

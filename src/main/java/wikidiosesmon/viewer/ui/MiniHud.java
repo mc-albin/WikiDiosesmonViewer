@@ -30,6 +30,12 @@ public final class MiniHud {
         return new int[]{x, y, w, h};
     }
 
+    /** Page size inside the small window, in virtual units (same layout as draw()). */
+    public static int[] pageSize(int vw, int vh) {
+        int[] r = rect(vw, vh);
+        return new int[]{r[2] - 2, r[3] - Chrome.MINI_HEADER - 1};
+    }
+
     /** Called from the HUD callback (real GUI coordinates). */
     public static void renderHud(DrawContext c) {
         MinecraftClient mc = MinecraftClient.getInstance();

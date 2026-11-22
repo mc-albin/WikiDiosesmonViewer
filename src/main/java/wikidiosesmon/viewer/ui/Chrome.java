@@ -215,8 +215,9 @@ public final class Chrome {
                     : Afk.recentlyMoved() ? "¡Te movieron mientras estabas AFK!"
                     : Afk.isAfk() ? "Estás AFK · " + Afk.elapsed() + " (clic para volver)" : "Ponerte AFK";
             case UPDATE -> switch (Updater.state()) {
-                case AVAILABLE -> "Versión " + Updater.latestVersion() + " disponible (tienes " + Updater.currentVersion() + ")"
-                        + (Updater.notes().isBlank() ? "" : ": " + Updater.notes()) + ". Clic para descargarla.";
+                case AVAILABLE -> "Versión " + Updater.latestVersion() + " disponible (tienes " + Updater.currentVersion() + ")\n"
+                        + (Updater.notes().isBlank() ? "" : shorten(Updater.notes().strip(), 180) + "\n")
+                        + "Clic para descargarla.";
                 case DOWNLOADING -> "Descargando la versión " + Updater.latestVersion() + "…";
                 case READY -> "Versión " + Updater.latestVersion() + " descargada. Se instala al cerrar el juego.";
                 case ERROR -> Updater.error() + " Clic para reintentar.";
@@ -233,10 +234,29 @@ public final class Chrome {
         };
     }
 
+    private static String shorten(String s, int max) {
+        return s.length() <= max ? s : s.substring(0, max - 1).stripTrailing() + "…";
+    }
+
+    /**
+     * Tooltip wrapped to a readable width. A long one (the update notes) used to be a single line
+     * across the whole screen, covering the header and the page.
+     */
     public static void drawTooltip(DrawContext c, Btn btn, int mx, int my) {
-        if (btn != null) {
-            c.drawTooltip(tr(), Text.literal(tooltip(btn)), mx, my);
+        if (btn == null) {
+            return;
         }
+        String text = tooltip(btn);
+        if (text.isEmpty()) {
+            return;
+        }
+        TextRenderer tr = tr();
+        int maxW = Math.max(120, Math.min(260, c.getScaledWindowWidth() / 2));
+        List<net.minecraft.text.OrderedText> lines = new ArrayList<>();
+        for (String part : text.split("\n")) {
+            lines.addAll(tr.wrapLines(Text.literal(part), maxW));
+        }
+        c.drawOrderedTooltip(tr, lines, mx, my);
     }
 
     /** Message over the page area while Chromium starts, the page loads, or after an error. */

@@ -46,6 +46,7 @@ public class WikiViewerClient implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(client -> safe(() -> {
             Viewer.tick(client);
             WebView.tick();
+            ChromiumPriority.tick();
             Afk.tick(client);
             ViewerConfig.tick();
             updateNotice(client);
@@ -69,6 +70,8 @@ public class WikiViewerClient implements ClientModInitializer {
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
             safe(ViewerConfig::save);
             safe(WebView::destroy);
+            // MCEF kills Chromium right after this; write the login cookies to disk first.
+            safe(() -> WebView.flushCookiesAndWait(1500));
             safe(Updater::applyOnExit);
         });
         Updater.checkAsync();

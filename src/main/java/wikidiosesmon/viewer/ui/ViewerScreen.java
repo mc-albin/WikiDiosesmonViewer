@@ -19,6 +19,11 @@ public final class ViewerScreen extends VScreen {
         super(Text.literal("WikiDiosesmon"));
     }
 
+    /** Page size in units of the virtual screen vw x vh, same layout as initScaled(). */
+    public static int[] pageSize(int vw, int vh) {
+        return new int[]{vw - MARGIN * 2 - 2, vh - MARGIN * 2 - Chrome.FULL_HEADER - 1};
+    }
+
     @Override
     protected void initScaled() {
         int x = MARGIN;
@@ -27,8 +32,9 @@ public final class ViewerScreen extends VScreen {
         int h = height - MARGIN * 2;
         px = x + 1;
         py = y + Chrome.FULL_HEADER;
-        pw = w - 2;
-        ph = h - Chrome.FULL_HEADER - 1;
+        int[] size = pageSize(width, height);
+        pw = size[0];
+        ph = size[1];
     }
 
     @Override
