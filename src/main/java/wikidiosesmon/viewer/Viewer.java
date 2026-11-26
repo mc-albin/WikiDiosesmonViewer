@@ -121,7 +121,13 @@ public final class Viewer {
                     Afk.toggle();
                 }
             }
-            case UPDATE -> wikidiosesmon.viewer.update.Updater.downloadAsync();
+            case UPDATE -> {
+                if (wikidiosesmon.viewer.update.Updater.state() == wikidiosesmon.viewer.update.Updater.State.UP_TO_DATE) {
+                    wikidiosesmon.viewer.update.Updater.checkNow();
+                } else {
+                    wikidiosesmon.viewer.update.Updater.downloadAsync();
+                }
+            }
             case BACK -> WebView.goBack();
             case HOME -> WebView.goHome();
             case RELOAD -> WebView.reload();

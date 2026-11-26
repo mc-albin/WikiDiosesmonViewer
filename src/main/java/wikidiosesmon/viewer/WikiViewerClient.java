@@ -50,6 +50,7 @@ public class WikiViewerClient implements ClientModInitializer {
             Afk.tick(client);
             ViewerConfig.tick();
             updateNotice(client);
+            safe(Updater::tick);
         }));
 
         ClientReceiveMessageEvents.GAME.register((message, overlay) -> {

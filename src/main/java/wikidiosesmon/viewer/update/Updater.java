@@ -53,6 +53,13 @@ public final class Updater {
     private static volatile long availableAt;
     private static String repo = "";
     private static Path staged;
+    /** While playing, check again every 30 minutes (only while no update was found). */
+    public static final long RECHECK_MS = 30L * 60 * 1000;
+    private static volatile long lastCheckAt;
+    /** True when the last check could not reach GitHub (offline, GitHub down, no release). */
+    private static volatile boolean lastCheckFailed;
+    /** When the player's own check finished (for the "Al día" label); -1 while it runs; 0 when automatic. */
+    private static volatile long manualAt;
 
     private Updater() {
     }
@@ -78,6 +85,30 @@ public final class Updater {
         return availableAt;
     }
 
+    public static boolean lastCheckFailed() {
+        return lastCheckFailed;
+    }
+
+    public static long manualAt() {
+        return manualAt;
+    }
+
+    /** Client tick: a new check every 30 minutes while up to date. */
+    public static void tick() {
+        if (state == State.UP_TO_DATE && System.currentTimeMillis() - lastCheckAt > RECHECK_MS) {
+            manualAt = 0;
+            fetchLatest();
+        }
+    }
+
+    /** The player pressed "Buscar": check now. */
+    public static void checkNow() {
+        if (state == State.UP_TO_DATE) {
+            manualAt = -1;
+            fetchLatest();
+        }
+    }
+
     public static String currentVersion() {
         return FabricLoader.getInstance().getModContainer(MOD_ID)
                 .map(m -> m.getMetadata().getVersion().getFriendlyString()).orElse("0");
@@ -94,16 +125,26 @@ public final class Updater {
         if (state == State.READY) {
             return;
         }
+        fetchLatest();
+    }
+
+    private static void fetchLatest() {
+        lastCheckAt = System.currentTimeMillis();
         state = State.CHECKING;
         String url = "https://github.com/" + repo + "/releases/latest/download/latest.json";
         HttpRequest request = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(15))
                 .header("User-Agent", "WikiDiosesmonViewer-Updater").GET().build();
         HTTP.sendAsync(request, HttpResponse.BodyHandlers.ofString()).whenComplete((res, err) -> {
+            if (manualAt == -1) {
+                manualAt = System.currentTimeMillis();
+            }
             if (err != null || res.statusCode() != 200) {
-                // No release yet, offline or GitHub down: just stay quiet.
+                // No release yet, offline or GitHub down: just stay quiet (tried again later).
+                lastCheckFailed = true;
                 state = State.UP_TO_DATE;
                 return;
             }
+            lastCheckFailed = false;
             try {
                 JsonObject o = JsonParser.parseString(res.body()).getAsJsonObject();
                 String v = o.get("version").getAsString().strip();

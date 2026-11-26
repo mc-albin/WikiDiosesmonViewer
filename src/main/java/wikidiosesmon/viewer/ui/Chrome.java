@@ -69,7 +69,7 @@ public final class Chrome {
         c.drawText(tr, pct, bx + (pw - tr.getWidth(pct)) / 2, by + 4, Theme.MUTED, false);
         bx = button(c, Btn.ZOOM_OUT, bx, by, s, s, mx, my) - 10;
 
-        // Update pill, only while there is something to say about an update.
+        // Update pill: "Buscar" while up to date, the update itself when there is one.
         String up = updateLabel();
         if (up != null) {
             int uw = tr.getWidth(up) + 10;
@@ -137,8 +137,16 @@ public final class Chrome {
             case DOWNLOADING -> "Descargando…";
             case READY -> "✔ Se instala al cerrar";
             case ERROR -> "⚠ Reintentar";
+            case CHECKING -> "↻ Buscando…";
+            case UP_TO_DATE -> recentManual() ? (Updater.lastCheckFailed() ? "✖ Sin red" : "✔ Al día") : "↻ Buscar";
             default -> null;
         };
+    }
+
+    /** A check the player started finished less than 6 seconds ago. */
+    private static boolean recentManual() {
+        long t = Updater.manualAt();
+        return t > 0 && System.currentTimeMillis() - t < 6000;
     }
 
     private void updateButton(DrawContext c, int x, int y, int w, int h, String label, int mx, int my) {
@@ -147,6 +155,8 @@ public final class Chrome {
         int tint = switch (Updater.state()) {
             case READY -> Theme.SUCCESS;
             case ERROR -> Theme.DANGER;
+            case CHECKING -> Theme.FAINT;
+            case UP_TO_DATE -> recentManual() ? (Updater.lastCheckFailed() ? Theme.DANGER : Theme.SUCCESS) : Theme.FAINT;
             default -> Theme.INFO;
         };
         Theme.box(c, x, y, w, h, Math.min(Theme.R_CARD, h / 3), Theme.withAlpha(tint, hover ? 0x70 : 0x40), Theme.withAlpha(tint, hover ? 0xFF : 0xCC));
@@ -221,6 +231,10 @@ public final class Chrome {
                 case DOWNLOADING -> "Descargando la versión " + Updater.latestVersion() + "…";
                 case READY -> "Versión " + Updater.latestVersion() + " descargada. Se instala al cerrar el juego.";
                 case ERROR -> Updater.error() + " Clic para reintentar.";
+                case CHECKING -> "Buscando actualizaciones…";
+                case UP_TO_DATE -> "Actualizaciones · v" + Updater.currentVersion() + "\n"
+                        + (recentManual() ? (Updater.lastCheckFailed() ? "No se pudo llegar a GitHub.\n" : "Tienes la última versión.\n") : "")
+                        + "Se revisa sola cada 30 minutos.\nClic para buscar ahora.";
                 default -> "";
             };
             case BACK -> "Atrás";
